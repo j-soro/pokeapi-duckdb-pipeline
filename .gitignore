@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Pipeline outputs
+data/
+*.duckdb
+
+# Dev tooling (not part of the deliverable)
+.claude/
