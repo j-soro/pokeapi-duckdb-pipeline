@@ -42,17 +42,18 @@ for a project this size).
                 │ uses ↓
 ┌───────────────▼────────────────────────────────────────────────────────────────┐
 │  DOMAIN  (pure, no I/O — innermost)                                            │
-│     models.py  (Pokemon · Species · Type · Move — msgspec Structs)             │
-│     records.py (RawRecord — the bronze envelope)                               │
-│     crawl.py   (frontier logic: worklist, dedupe, link-following)              │
+│     models.py  (Pokemon · Species · Type · Move — msgspec Structs = staging)   │
+│     (RawRecord lives in ports.py — generic envelope, not domain; PokeAPI       │
+│      link/url navigation is private to the source adapter)                     │
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Ports
 
 ```python
-class SourcePort(Protocol):                    # PokeAPI
-    def get(self, path: str) -> dict: ...
+class SourcePort(Protocol):                    # PokeAPI — minimal; adapter hides ALL navigation
+    def records(self, scope: Scope, have: set[str]) -> Iterator[RawRecord]: ...
+    # RawRecord (key, entity_type, payload: dict, fetched_at) is defined here in ports.py
 
 class StoragePort(Protocol):                   # DuckDB — the whole warehouse, one port/adapter/connection
     def existing_raw_keys(self) -> set[str]: ...                  # resume
@@ -74,18 +75,19 @@ The adapter must not hide ETL logic.
 
 `Pipeline` is dumb: it runs stages in order, skipping inactive ones. **Stages communicate only through
 the DuckDB medallion layers** (`raw → staging → marts`). `Context` carries cross-cutting run state
-(config, logger, stats) — **never data**.
+(config, stats, active stages) — **never data, and no logger** (logging is stdlib module loggers,
+configured once in `cli.py`).
 
 ```python
 class Pipeline:
     def run(self, ctx: Context) -> None:
         for stage in self._stages:
             if stage.name in ctx.active:        # transform omitted by default → skipped
-                ctx.log.info("▶ %s", stage.name)
+                log.info("▶ %s", stage.name)    # module logger; Context holds no logger
                 stage.run(ctx)
 ```
 
-- **ExtractStage** — *capture*. `crawl(source)` is a generator yielding `RawRecord`s over the frontier;
+- **ExtractStage** — *capture*. `source.records(scope, have)` is the generator yielding `RawRecord`s;
   `StoragePort.write_raw` consumes the stream in batches (incremental bronze checkpoint).
   Generators live **only here**.
 - **LoadStage** — *interpret*. `read_raw(entity)` → **msgspec decode/validate** → typed `staging` rows
@@ -111,19 +113,27 @@ validated projection**, not a copy.
   - `move(id PK, name, power INTEGER **NULL**, type_id, damage_class)` — `power` is null for status moves
 - **`marts.*` (gold)** — deferred (BST, 18×18 type matrix, evolution families). Diagram only.
 
-## 5. Extraction — frontier crawl
+## 5. Extraction — linked-resource fetch (inside the source adapter)
 
-Seed the worklist by paginating `/pokemon` (cap to scope, default 151). For each fetched entity, follow
-discovered links (`species.url`, `moves[].move.url`, `types[].type.url`) onto the worklist; dedupe by
-key; stop when the frontier is empty. URL→id via `…/(\d+)/?$`. **Resume** skips keys already in
-`raw`. Custom **`User-Agent` required** (default httpx/urllib UA is 403'd by Cloudflare). Polite
-throttle between calls.
+The link graph is shallow and known (pokemon → {species, moves}; types independent), so there is **no
+generic frontier/worklist** — just two explicit passes inside `PokeApiSource.records()`:
+1. List the pokemon in scope (paginate `/pokemon`, cap 151) and fetch each; collect the referenced
+   species + move keys from `species.url` / `moves[].move.url`.
+2. Fetch those species + moves, plus the fixed 18 types.
+
+Moves are the only entity not enumerable up front (there is no "moves of Gen 1" endpoint) — the sole
+reason link-following exists. URL→id (`…/(\d+)/?$`) and all path/navigation logic are **private to the
+adapter**, not domain. **Resume** skips keys already in `raw` (the `have` set); re-traversed pokemon are
+served from the hishel cache. Custom **`User-Agent` required** (default UA is 403'd by Cloudflare).
+Polite throttle between calls.
 
 ## 6. Config, caching, idempotency
 
 - **Config**: `config.toml` at root → `msgspec.toml.decode` into a `frozen Config` struct (zero extra
   deps on 3.13). CLI flags override. **Manual DI** in `PipelineRunner` (no container).
-- **Cache**: `raw` is the cache — re-run Load/Transform with zero API calls. (`hishel` optional, dev only.)
+- **Cache (two layers)**: `raw` is the cross-run cache — re-run Load/Transform with zero API calls.
+  Plus a **default-on hishel HTTP transport cache** inside the source adapter (honors API cache headers;
+  polite while iterating on the fetch logic).
 - **Idempotency/resume**: `write_raw` upsert by key; `staging` `INSERT OR REPLACE` by PK; resume via
   `existing_raw_keys()`. Knobs: `--refresh` (force re-pull) and a **completeness gate** (Load warns/refuses
   on an incomplete `raw`).
@@ -131,16 +141,17 @@ throttle between calls.
 ## 7. Module layout (src-layout)
 
 ```
-config.toml                         pyproject.toml (uv)
-src/pokeapi_pipeline/
-  domain/   models.py  records.py  crawl.py      # pure, no I/O
-  ports.py
-  extract/  pokeapi_source.py                    # SourcePort adapter
-  load/     duckdb_storage.py                     # StoragePort adapter + decode usage
-  transform/                                      # deferred
-  app/      pipeline.py  runner.py  context.py    # PipelineRunner = entry + composition root
-  config.py  cli.py                               # cli.py = thin UI driving adapter
-tests/                                            # fake SourcePort; in-memory DuckDB; fixtures
+config.toml   pyproject.toml   README.md
+src/pokeapi_pipeline/                            # FLAT — no per-layer folders
+  config.py      # Config + load_config()
+  ports.py       # SourcePort · StoragePort · PipelineRunnerPort · RawRecord
+  models.py      # Pokemon · Species · Type · Move (msgspec structs = staging schema)
+  source.py      # PokeApiSource — SourcePort adapter (httpx + hishel + UA; navigation private)
+  storage.py     # DuckDbStorage — StoragePort adapter + msgspec decode (raw → staging)
+  pipeline.py    # Context · Stats · Pipeline · ExtractStage · LoadStage · TransformStage
+  runner.py      # PipelineRunner — composition root (manual DI)
+  cli.py         # thin driving adapter (argparse → runner); configures logging
+tests/           # fake SourcePort; in-memory DuckDB; JSON fixtures
 ```
 
 ## 8. Testing
