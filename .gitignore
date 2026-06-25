@@ -10,3 +10,6 @@ data/
 
 # Dev tooling (not part of the deliverable)
 .claude/
+
+# Dev tooling (Serena MCP) — not part of the deliverable
+.serena/
