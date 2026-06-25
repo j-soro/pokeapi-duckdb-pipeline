@@ -43,8 +43,8 @@ for a project this size).
 ┌───────────────▼────────────────────────────────────────────────────────────────┐
 │  DOMAIN  (pure, no I/O — innermost)                                            │
 │     models.py  (Pokemon · Species · Type · Move — msgspec Structs = staging)   │
-│     (RawRecord lives in ports.py — generic envelope, not domain; PokeAPI       │
-│      link/url navigation is private to the source adapter)                     │
+│     (RawRecord/RunResult live in records.py — generic value types, not domain; │
+│      PokeAPI link/url navigation is private to the source adapter)             │
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -52,19 +52,18 @@ for a project this size).
 
 ```python
 class SourcePort(Protocol):                    # PokeAPI — minimal; adapter hides ALL navigation
-    def records(self, scope: Scope, have: set[str]) -> Iterator[RawRecord]: ...
-    # RawRecord (key, entity_type, payload: dict, fetched_at) is defined here in ports.py
+    def records(self, limit: int, have: set[str]) -> Iterator[RawRecord]: ...
+    # RawRecord/RunResult are value types defined in records.py (not ports.py, not domain)
 
 class StoragePort(Protocol):                   # DuckDB — the whole warehouse, one port/adapter/connection
-    def existing_raw_keys(self) -> set[str]: ...                  # resume
-    def write_raw(self, records: Iterable[RawRecord]) -> int: ... # bronze, upsert by key
-    def read_raw(self, entity_type: str) -> Iterator[dict]: ...   # payloads to decode
-    def write_staging(self, entity_type: str, rows: Iterable[Struct]) -> int: ...
-    def execute(self, sql: str, params: tuple = ()) -> None: ...  # gold/transform (deferred)
-    def query(self, sql: str, params: tuple = ()) -> list[tuple]: ...
+    def existing_raw_keys(self) -> set[str]: ...                   # resume
+    def write_raw(self, records: Iterable[RawRecord]) -> int: ...  # bronze, upsert by key
+    def read_raw(self, entity_type: str) -> Iterator[dict]: ...    # payloads to decode
+    def write_staging(self, entity_type: str, rows: Iterable[object]) -> int: ...  # msgspec Structs
+    # execute()/query() for gold/transform are deferred — added with TransformStage
 
 class PipelineRunnerPort(Protocol):            # driving — the entry the CLI (or any driver) calls
-    def run(self, overrides: RunOverrides) -> RunResult: ...
+    def run(self) -> RunResult: ...            # no args — fully config-driven
 ```
 
 **Rule that keeps `StoragePort` from becoming a junk-drawer:** the port only *moves* data; all *logic*
@@ -99,18 +98,30 @@ class Pipeline:
 Extract stores faithful payloads and rarely changes; Load parses/validates/shapes and changes often.
 Keeping `raw` immutable means a schema or parsing change re-runs **Load against cached raw with zero
 API calls**, and Extract can't fail on a validation bug (it just captures bytes). A single
-`/pokemon/{id}` payload is ~50KB / 100+ fields; `staging.pokemon` keeps ~6 — Load is a **lossy,
-validated projection**, not a copy.
+`/pokemon/{id}` payload is ~50KB / 100+ fields; `staging.pokemon` keeps the analytically-useful subset
+(stats, types, abilities, sprites, links) — Load is a **validated projection** (flattened, url→id),
+not a verbatim copy. Staging carries every source field the deferred Transform might need, not just
+basics, so Transform never re-extracts; only true derivations (BST, the type matrix) are left to it.
 
 ## 4. Data model (medallion, one DuckDB file)
 
 - **`raw.*` (bronze)** — `(key VARCHAR PRIMARY KEY, payload JSON, fetched_at TIMESTAMP)`, upsert by key.
   Doubles as cache + resume checkpoint.
-- **`staging.*` (silver)** — typed, one table per entity, **no derived fields**. Confirmed shapes:
-  - `pokemon(id PK, name, height, weight, types VARCHAR[], stat columns…, species_id)`
-  - `pokemon_species(id PK, name, evolves_from_id INT NULL, generation_id, is_legendary, is_mythical)`
-  - `type(id PK, name, damage_relations JSON)` (relations kept structured; matrix is Transform)
-  - `move(id PK, name, power INTEGER **NULL**, type_id, damage_class)` — `power` is null for status moves
+- **`staging.*` (silver)** — typed, one table per entity. Carries the analytically-useful source
+  fields (everything a deferred Transform might need, not just basics); **no derived fields**
+  (aggregates/matrices belong to Transform). Slugs are the API's hyphenated `name`s; ids are parsed
+  from URLs. Shapes:
+  - `pokemon(id PK, name, height, weight, base_experience NULL, "order", is_default, species_id,
+    types VARCHAR[], abilities VARCHAR[], sprite_front_default NULL, sprite_back_default NULL,
+    hp, attack, defense, special_attack, special_defense, speed)`
+  - `pokemon_species(id PK, name, "order", generation_id, evolution_chain_id, evolves_from_id NULL,
+    is_legendary, is_mythical, is_baby, capture_rate, base_happiness NULL, gender_rate,
+    hatch_counter NULL, has_gender_differences, forms_switchable, growth_rate, color, shape NULL,
+    habitat NULL, egg_groups VARCHAR[], flavor_text NULL)` — flavor = English entry, whitespace-cleaned
+  - `type(id PK, name, generation_id, move_damage_class NULL,
+    {double,half,no}_damage_{to,from} VARCHAR[])` — relations kept as slug lists; the 18×18 matrix is Transform
+  - `move(id PK, name, power INTEGER NULL, accuracy NULL, pp NULL, priority, effect_chance NULL,
+    type_id, damage_class, target, generation_id)` — `power`/`accuracy` null for status moves
 - **`marts.*` (gold)** — deferred (BST, 18×18 type matrix, evolution families). Diagram only.
 
 ## 5. Extraction — linked-resource fetch (inside the source adapter)
@@ -130,13 +141,14 @@ Polite throttle between calls.
 ## 6. Config, caching, idempotency
 
 - **Config**: `config.toml` at root → `msgspec.toml.decode` into a `frozen Config` struct (zero extra
-  deps on 3.13). CLI flags override. **Manual DI** in `PipelineRunner` (no container).
+  deps on 3.13). **Config-only — no CLI args** (the CLI just loads config and runs). **Manual DI** in
+  `PipelineRunner` (no container).
 - **Cache (two layers)**: `raw` is the cross-run cache — re-run Load/Transform with zero API calls.
   Plus a **default-on hishel HTTP transport cache** inside the source adapter (honors API cache headers;
   polite while iterating on the fetch logic).
 - **Idempotency/resume**: `write_raw` upsert by key; `staging` `INSERT OR REPLACE` by PK; resume via
-  `existing_raw_keys()`. Knobs: `--refresh` (force re-pull) and a **completeness gate** (Load warns/refuses
-  on an incomplete `raw`).
+  `existing_raw_keys()`. Knobs (config): `force_refresh` (force re-pull) and a **completeness gate**
+  (Load warns/refuses on an incomplete `raw`).
 
 ## 7. Module layout (src-layout)
 
@@ -144,13 +156,14 @@ Polite throttle between calls.
 config.toml   pyproject.toml   README.md
 src/pokeapi_pipeline/                            # FLAT — no per-layer folders
   config.py      # Config + load_config()
-  ports.py       # SourcePort · StoragePort · PipelineRunnerPort · RawRecord
+  ports.py       # SourcePort · StoragePort · PipelineRunnerPort (pure Protocols)
+  records.py     # RawRecord · RunResult (value types crossing the ports)
   models.py      # Pokemon · Species · Type · Move (msgspec structs = staging schema)
   source.py      # PokeApiSource — SourcePort adapter (httpx + hishel + UA; navigation private)
   storage.py     # DuckDbStorage — StoragePort adapter + msgspec decode (raw → staging)
   pipeline.py    # Context · Stats · Pipeline · ExtractStage · LoadStage · TransformStage
   runner.py      # PipelineRunner — composition root (manual DI)
-  cli.py         # thin driving adapter (argparse → runner); configures logging
+  cli.py         # thin driving adapter (loads config → runner); configures logging
 tests/           # fake SourcePort; in-memory DuckDB; JSON fixtures
 ```
 

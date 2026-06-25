@@ -1,5 +1,4 @@
 """Port contracts (Protocols implemented by adapters)."""
-from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 from typing import Protocol

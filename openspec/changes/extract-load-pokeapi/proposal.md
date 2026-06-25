@@ -28,8 +28,10 @@ separately as a high-level diagram, exactly as the brief specifies.
   navigation (paths, link-following, url→id parsing) is encapsulated entirely in the source adapter.
 - **Load** *interprets*: it reads `raw` payloads, **msgspec-decodes/validates/reshapes** them into the
   typed **`staging`** (silver) schema — one table per entity, **no derived fields**. It is the sole
-  writer of `staging` (Extract owns `raw`). A ~50 KB payload becomes ~6 validated columns — a lossy,
-  validated projection, not a copy. Re-running Load against cached `raw` costs zero API calls.
+  writer of `staging` (Extract owns `raw`). Each ~50 KB payload is projected to the analytically-useful
+  typed columns — **every source field the deferred Transform might need, not just the basics**, so it
+  never has to re-extract — a validated projection (flattened + url→id), not a verbatim copy. Re-running
+  Load against cached `raw` costs zero API calls.
 - **Pipeline orchestration**: a thin stage-runner (`Pipeline([...]).run(ctx)`) wires the streaming
   ingest behind a single, config-driven CLI entrypoint (`uv run pipeline`) with structured logging and
   a selectable scope. A future `TransformStage` (staging → star schema) appends with no change to E/L.

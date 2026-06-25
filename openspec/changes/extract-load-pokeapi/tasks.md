@@ -5,23 +5,28 @@ types first, then adapters, then orchestration, then the CLI, then tests. Each b
 is a reviewable step — we go one at a time.
 
 Flat package layout (no per-layer folders):
-`config.py · ports.py · models.py · source.py · storage.py · pipeline.py · runner.py · cli.py`
+`config.py · ports.py · records.py · models.py · source.py · storage.py · pipeline.py · runner.py · cli.py`
+
+Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format),
+`mypy` (dev-only, lenient), `pytest`.
 
 ## 1. Contracts & config
 
-- [ ] `ports.py`: `SourcePort` (single `records(scope, have) -> Iterator[RawRecord]`),
-      `StoragePort` (`existing_raw_keys`, `write_raw`, `read_raw`, `write_staging`,
-      `execute`, `query`), `PipelineRunnerPort` (`run(overrides) -> RunResult`).
-- [ ] `ports.py`: `RawRecord` dataclass (`key`, `entity_type`, `payload: dict`, `fetched_at`)
-      — the bronze envelope / port currency (not domain).
-- [ ] `config.py`: `Config` (frozen msgspec struct: scope, db_path, user_agent, throttle,
-      refresh, completeness_gate) + `load_config()` via `msgspec.toml.decode`. CLI overrides merge.
-- [ ] `config.toml` at root: default Gen-1 scope (151) + run settings.
+- [x] `ports.py`: `SourcePort` (single `records(limit, have) -> Iterator[RawRecord]`),
+      `StoragePort` (`existing_raw_keys`, `write_raw`, `read_raw`, `write_staging`;
+      `execute`/`query` deferred with Transform), `PipelineRunnerPort` (`run() -> RunResult`).
+- [x] `records.py`: `RawRecord` dataclass (`key`, `entity_type`, `payload: dict`, `fetched_at`)
+      + `RunResult` — generic value types crossing the ports (not domain, not `ports.py`).
+- [x] `config.py`: `Config` (frozen msgspec struct: `db_path`, `limit`, `user_agent`,
+      `request_delay`, `force_refresh`, `stages`) + `load_config()` via `msgspec.toml.decode`.
+      Config-only — no CLI args.
+- [x] `config.toml` at root: default Gen-1 scope (151) + run settings.
 
 ## 2. Domain models
 
-- [ ] `models.py`: msgspec structs = staging schema. `Pokemon`, `Species`, `Type`, `Move`
-      (`power: int | None`). These are the typed projection Load decodes raw into.
+- [x] `models.py`: msgspec structs = staging schema. `Pokemon`, `Species`, `Type`, `Move` —
+      comprehensive analytically-useful field sets (everything a deferred Transform might need,
+      no derivations). The typed projection Load decodes/reshapes raw into.
 
 ## 3. Source adapter (capture)
 
@@ -38,7 +43,8 @@ Flat package layout (no per-layer folders):
       `raw`, `staging` (+ `meta`) on init.
 - [ ] `write_raw`: upsert `RawRecord`s into `raw.*` by key (`INSERT OR REPLACE`), payload as JSON.
 - [ ] `read_raw` / `write_staging`: Load reads raw payloads, **msgspec-decodes into `models.py`
-      structs** (validate + reshape: url→id, flatten stats, nullable power), writes typed `staging.*`.
+      structs** (validate + reshape: url→id, flatten stats, slug lists, nullable power/accuracy),
+      writes typed `staging.*`.
 
 ## 5. Orchestration
 
@@ -49,8 +55,8 @@ Flat package layout (no per-layer folders):
 
 ## 6. CLI & logging
 
-- [ ] `cli.py`: thin driving adapter. Parse args (argparse now; click later) → `RunOverrides`
-      → `PipelineRunner(...).run()`. Configure stdlib `logging` once here.
+- [ ] `cli.py`: thin driving adapter. `load_config()` → `PipelineRunner(...).run()` — no args,
+      fully config-driven. Configure stdlib `logging` once here.
 
 ## 7. Tests (per module)
 
