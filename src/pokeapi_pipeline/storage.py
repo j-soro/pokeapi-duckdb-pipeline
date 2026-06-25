@@ -125,6 +125,8 @@ _LOADERS: dict[str, tuple] = {
     "move": (_reshape_move, Move, "move"),
 }
 
+ENTITY_TYPES: tuple[str, ...] = tuple(_LOADERS)  # the entity types Load stages over
+
 
 def to_staging(entity_type: str, payload: dict) -> msgspec.Struct:
     """Reshape a raw payload and validate it against its struct (the validation gate)."""

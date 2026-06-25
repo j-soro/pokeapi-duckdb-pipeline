@@ -3,8 +3,7 @@
 The fixtures on disk are the oracle: the source must yield exactly the captured entities.
 """
 
-import json
-from pathlib import Path
+from collections.abc import Callable
 
 import httpx
 import pytest
@@ -13,32 +12,9 @@ from pokeapi_pipeline.config import Config
 from pokeapi_pipeline.source import PokeApiSource
 
 _HOST = "https://pokeapi.co/api/v2"
-_FIXTURES = Path(__file__).parent / "fixtures"
 
-
-def _load_fixtures() -> dict[str, dict]:
-    """{'pokemon:1': payload, 'move:13': payload, ...} from the fixtures tree."""
-    return {
-        f"{path.parent.name}:{path.stem}": json.loads(path.read_text())
-        for path in _FIXTURES.rglob("*.json")
-    }
-
-
-def _pokemon_ids(fixtures: dict[str, dict]) -> list[int]:
-    return sorted(int(k.split(":")[1]) for k in fixtures if k.startswith("pokemon:"))
-
-
-def _make_handler(fixtures: dict[str, dict], pokemon_ids: list[int]):
-    def handler(request: httpx.Request) -> httpx.Response:
-        path = request.url.path.removeprefix("/api/v2").strip("/")
-        if path == "pokemon":  # listing (id-less path); query carries the limit
-            limit = int(request.url.params.get("limit", len(pokemon_ids)))
-            results = [{"url": f"{_HOST}/pokemon/{i}/"} for i in pokemon_ids[:limit]]
-            return httpx.Response(200, json={"results": results})
-        entity, id_ = path.split("/")
-        return httpx.Response(200, json=fixtures[f"{entity}:{id_}"])
-
-    return handler
+Handler = Callable[[httpx.Request], httpx.Response]
+MakeHandler = Callable[[dict[str, dict], list[int]], Handler]
 
 
 @pytest.fixture(autouse=True)
@@ -48,20 +24,8 @@ def _no_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def fixtures() -> dict[str, dict]:
-    return _load_fixtures()
-
-
-@pytest.fixture
-def full_limit(fixtures: dict[str, dict]) -> int:
-    """A limit covering every captured pokemon."""
-    return len(_pokemon_ids(fixtures))
-
-
-@pytest.fixture
-def source(fixtures: dict[str, dict]) -> PokeApiSource:
-    handler = _make_handler(fixtures, _pokemon_ids(fixtures))
-    return PokeApiSource(Config(request_delay=0.0), transport=httpx.MockTransport(handler))
+def source(mock_transport: httpx.MockTransport) -> PokeApiSource:
+    return PokeApiSource(Config(request_delay=0.0), transport=mock_transport)
 
 
 def test_fetches_exactly_the_captured_universe(
@@ -113,9 +77,10 @@ def test_key_parsing_rejects_unparseable() -> None:
         PokeApiSource._key(f"{_HOST}/pokemon/")
 
 
-def test_retries_then_succeeds(fixtures: dict[str, dict]) -> None:
-    pokemon_ids = _pokemon_ids(fixtures)
-    inner = _make_handler(fixtures, pokemon_ids)
+def test_retries_then_succeeds(
+    fixtures: dict[str, dict], pokemon_ids: list[int], make_handler: MakeHandler
+) -> None:
+    inner = make_handler(fixtures, pokemon_ids)
     calls = {"list": 0}
 
     def flaky(request: httpx.Request) -> httpx.Response:
@@ -138,12 +103,18 @@ def test_default_transport_builds_cache_transport() -> None:
 
 
 def test_throttles_real_hits(
-    fixtures: dict[str, dict], full_limit: int, monkeypatch: pytest.MonkeyPatch
+    fixtures: dict[str, dict],
+    pokemon_ids: list[int],
+    full_limit: int,
+    make_handler: MakeHandler,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     slept: list[float] = []
     monkeypatch.setattr("pokeapi_pipeline.source.time.sleep", slept.append)
-    handler = _make_handler(fixtures, _pokemon_ids(fixtures))
-    source = PokeApiSource(Config(request_delay=0.5), transport=httpx.MockTransport(handler))
+    source = PokeApiSource(
+        Config(request_delay=0.5),
+        transport=httpx.MockTransport(make_handler(fixtures, pokemon_ids)),
+    )
     list(source.records(limit=full_limit, existing=set()))
     assert slept and all(s == 0.5 for s in slept)  # every non-cache hit is throttled
 

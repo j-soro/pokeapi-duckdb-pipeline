@@ -10,7 +10,6 @@ class Config(msgspec.Struct, frozen=True):
     limit: int = 151
     user_agent: str = "pokeapi-pipeline/0.1"
     request_delay: float = 0.1  # seconds between API calls
-    force_refresh: bool = False  # re-fetch even if already in raw
     stages: tuple[str, ...] = ("extract", "load")  # transform off by default
 
 

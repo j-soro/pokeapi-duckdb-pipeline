@@ -20,15 +20,12 @@ Extract SHALL store API payloads verbatim, without decoding or reshaping them.
 - THEN its payload is persisted unchanged, with no validation applied during capture
 
 ### Requirement: Resumable extraction
-Extract SHALL skip keys already present in raw unless force_refresh is set.
+Extract SHALL skip keys already present in raw. A full refresh is a clean rebuild
+(delete the DuckDB file), consistent with the no-migrations model.
 
 #### Scenario: Re-run after interruption
 - WHEN a run is interrupted and restarted
 - THEN only entities missing from raw are fetched
-
-#### Scenario: Forced refresh
-- WHEN force_refresh is true
-- THEN all in-scope entities are re-fetched regardless of raw contents
 
 ### Requirement: Fair-use fetching
 Extract SHALL send a custom User-Agent, delay between requests, and cache HTTP responses.

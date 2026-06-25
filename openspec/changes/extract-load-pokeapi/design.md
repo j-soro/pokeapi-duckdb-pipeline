@@ -33,7 +33,7 @@ for a project this size).
                    │            dependencies point inward ↓
 ┌──────────────────┼─────────────────────────────────────┼───────────────────────┐
 │  APPLICATION  (use cases / orchestration)                                       │
-│     Pipeline([ ExtractStage, LoadStage, TransformStage ]).run(ctx)             │
+│     Pipeline([ ExtractStage, LoadStage, (TransformStage) ], active).run()       │
 │        ExtractStage ─uses▶ SourcePort + StoragePort.write_raw                   │
 │        LoadStage    ─uses▶ StoragePort.read_raw / write_staging                 │
 │        TransformStage ─uses▶ StoragePort.execute   (deferred, off by default)   │
@@ -72,18 +72,16 @@ The adapter must not hide ETL logic.
 
 ## 3. The pipeline & stages
 
-`Pipeline` is dumb: it runs stages in order, skipping inactive ones. **Stages communicate only through
-the DuckDB medallion layers** (`raw → staging → marts`). `Context` carries cross-cutting run state
-(config, stats, active stages) — **never data, and no logger** (logging is stdlib module loggers,
-configured once in `cli.py`).
+`Pipeline` is dumb: it runs the active stages in order and folds each stage's `RunResult` into the run
+summary. **Stages communicate only through the DuckDB medallion layers** (`raw → staging → marts`),
+never in memory — so there is **no shared `Context`**. Each stage gets its adapters at construction
+(manual DI in the runner) and returns only what it wrote; `Stage` is an internal ABC the three stages
+inherit. Logging is stdlib module loggers, configured once in `cli.py`.
 
 ```python
 class Pipeline:
-    def run(self, ctx: Context) -> None:
-        for stage in self._stages:
-            if stage.name in ctx.active:        # transform omitted by default → skipped
-                log.info("▶ %s", stage.name)    # module logger; Context holds no logger
-                stage.run(ctx)
+    def run(self) -> RunResult:                 # transform omitted from `active` → skipped
+        return RunResult.merge(s.run() for s in self._stages if s.name in self._active)
 ```
 
 - **ExtractStage** — *capture*. `source.records(scope, have)` is the generator yielding `RawRecord`s;
@@ -147,8 +145,8 @@ Polite throttle between calls.
   Plus a **default-on hishel HTTP transport cache** inside the source adapter (honors API cache headers;
   polite while iterating on the fetch logic).
 - **Idempotency/resume**: `write_raw` upsert by key; `staging` `INSERT OR REPLACE` by PK; resume via
-  `existing_raw_keys()`. Knobs (config): `force_refresh` (force re-pull) and a **completeness gate**
-  (Load warns/refuses on an incomplete `raw`).
+  `existing_raw_keys()`. A full refresh is a clean rebuild (delete the DuckDB file) — consistent with
+  the no-migrations model, so no `force_refresh` knob.
 
 ## 7. Module layout (src-layout)
 
@@ -161,7 +159,7 @@ src/pokeapi_pipeline/                            # FLAT — no per-layer folders
   models.py      # Pokemon · Species · Type · Move (msgspec structs = staging schema)
   source.py      # PokeApiSource — SourcePort adapter (httpx + hishel + UA; navigation private)
   storage.py     # DuckDbStorage — StoragePort adapter + msgspec decode (raw → staging)
-  pipeline.py    # Context · Stats · Pipeline · ExtractStage · LoadStage · TransformStage
+  pipeline.py    # Stage (ABC) · Pipeline · ExtractStage · LoadStage · (TransformStage later)
   runner.py      # PipelineRunner — composition root (manual DI)
   cli.py         # thin driving adapter (loads config → runner); configures logging
 tests/           # fake SourcePort; in-memory DuckDB; JSON fixtures

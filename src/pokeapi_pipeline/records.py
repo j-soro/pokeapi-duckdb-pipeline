@@ -1,5 +1,6 @@
 """Value types exchanged across the ports."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -16,8 +17,15 @@ class RawRecord:
 
 @dataclass(frozen=True, slots=True)
 class RunResult:
-    """Run summary."""
+    """Run summary; stages return partial results the pipeline folds together."""
 
-    raw_written: int
-    staging_written: int
-    api_calls: int
+    raw_written: int = 0
+    staging_written: int = 0
+
+    @classmethod
+    def merge(cls, results: Iterable["RunResult"]) -> "RunResult":
+        items = list(results)
+        return cls(
+            raw_written=sum(r.raw_written for r in items),
+            staging_written=sum(r.staging_written for r in items),
+        )

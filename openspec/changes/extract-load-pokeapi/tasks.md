@@ -18,7 +18,7 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
 - [x] `records.py`: `RawRecord` dataclass (`key`, `entity_type`, `payload: dict`, `fetched_at`)
       + `RunResult` — generic value types crossing the ports (not domain, not `ports.py`).
 - [x] `config.py`: `Config` (frozen msgspec struct: `db_path`, `limit`, `user_agent`,
-      `request_delay`, `force_refresh`, `stages`) + `load_config()` via `msgspec.toml.decode`.
+      `request_delay`, `stages`) + `load_config()` via `msgspec.toml.decode`.
       Config-only — no CLI args.
 - [x] `config.toml` at root: default Gen-1 scope (151) + run settings.
 
@@ -51,9 +51,11 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
 
 ## 5. Orchestration
 
-- [ ] `pipeline.py`: `Context` + `Stats` (run-state; no logger). `Pipeline([stages]).run(ctx)`
-      dumb runner (skip inactive). `ExtractStage`, `LoadStage`, `TransformStage` (off by default).
-- [ ] `runner.py`: `PipelineRunner` (composition root) — build adapters from config, wire stages,
+- [x] `pipeline.py`: `Stage` (ABC) + `ExtractStage`, `LoadStage`. `Pipeline(stages, active)` dumb
+      runner — runs active stages, folds each stage's `RunResult`. No shared `Context`: stages get
+      deps at construction and communicate only through the DuckDB layers. Transform drops in later
+      as a third `Stage` (the seam is the ABC + `config.stages`).
+- [x] `runner.py`: `PipelineRunner` (composition root) — build adapters from config, wire stages,
       run `Pipeline`, return `RunResult`. Manual DI, no container.
 
 ## 6. CLI & logging
@@ -73,8 +75,8 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
 
 ## 8. Nice-to-have (observability)
 
-- [ ] `meta.runs` table: `PipelineRunner` writes one row per run from `ctx.stats`
-      (run_id, started/finished, scope, api_calls, counts, status). Run lineage/audit.
+- [ ] `meta.runs` table: `PipelineRunner` writes one row per run
+      (run_id, started/finished, scope, counts, status). Run lineage/audit.
 
 ## 9. Deliverables
 
