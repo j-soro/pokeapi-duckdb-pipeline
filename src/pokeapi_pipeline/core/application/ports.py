@@ -3,7 +3,7 @@
 from collections.abc import Iterable, Iterator
 from typing import Protocol
 
-from pokeapi_pipeline.records import RawRecord, RunResult
+from pokeapi_pipeline.core.domain.records import RawRecord, RunResult
 
 
 class SourcePort(Protocol):

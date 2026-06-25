@@ -8,8 +8,8 @@ from collections.abc import Callable
 import httpx
 import pytest
 
+from pokeapi_pipeline.adapters.source import PokeApiSource
 from pokeapi_pipeline.config import Config
-from pokeapi_pipeline.source import PokeApiSource
 
 _HOST = "https://pokeapi.co/api/v2"
 
@@ -20,7 +20,7 @@ MakeHandler = Callable[[dict[str, dict], list[int]], Handler]
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
     """Strip throttle/backoff delays so the suite is fast."""
-    monkeypatch.setattr("pokeapi_pipeline.source.time.sleep", lambda _s: None)
+    monkeypatch.setattr("pokeapi_pipeline.adapters.source.time.sleep", lambda _s: None)
 
 
 @pytest.fixture
@@ -110,7 +110,7 @@ def test_throttles_real_hits(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     slept: list[float] = []
-    monkeypatch.setattr("pokeapi_pipeline.source.time.sleep", slept.append)
+    monkeypatch.setattr("pokeapi_pipeline.adapters.source.time.sleep", slept.append)
     source = PokeApiSource(
         Config(request_delay=0.5),
         transport=httpx.MockTransport(make_handler(fixtures, pokemon_ids)),

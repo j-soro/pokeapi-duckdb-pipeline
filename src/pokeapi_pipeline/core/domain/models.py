@@ -26,7 +26,7 @@ class Pokemon(msgspec.Struct, frozen=True):
     speed: int
 
 
-class Species(msgspec.Struct, frozen=True):
+class PokemonSpecies(msgspec.Struct, frozen=True):
     """A pokemon-species row."""
 
     id: int
@@ -52,7 +52,7 @@ class Species(msgspec.Struct, frozen=True):
     flavor_text: str | None
 
 
-class Type(msgspec.Struct, frozen=True):
+class PokemonType(msgspec.Struct, frozen=True):
     """A type row."""
 
     id: int
@@ -67,7 +67,7 @@ class Type(msgspec.Struct, frozen=True):
     no_damage_from: tuple[str, ...]
 
 
-class Move(msgspec.Struct, frozen=True):
+class PokemonMove(msgspec.Struct, frozen=True):
     """A move row."""
 
     id: int

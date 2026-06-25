@@ -6,9 +6,9 @@ reports only what it wrote. Transform drops in later as a third Stage.
 
 from abc import ABC, abstractmethod
 
-from pokeapi_pipeline.ports import SourcePort, StoragePort
-from pokeapi_pipeline.records import RunResult
-from pokeapi_pipeline.storage import ENTITY_TYPES, to_staging
+from pokeapi_pipeline.core.application.ports import SourcePort, StoragePort
+from pokeapi_pipeline.core.domain.mapping import ENTITY_TYPES, to_staging
+from pokeapi_pipeline.core.domain.records import RunResult
 
 
 class Stage(ABC):

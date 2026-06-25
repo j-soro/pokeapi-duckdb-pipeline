@@ -8,8 +8,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-from pokeapi_pipeline.records import RawRecord
-from pokeapi_pipeline.storage import DuckDbStorage
+from pokeapi_pipeline.adapters.storage import DuckDbStorage
+from pokeapi_pipeline.core.domain.records import RawRecord
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 _HOST = "https://pokeapi.co/api/v2"

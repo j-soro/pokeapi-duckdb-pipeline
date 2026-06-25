@@ -4,8 +4,8 @@ Build order for the `extract-load-pokeapi` change. Inner-to-outer: contracts and
 types first, then adapters, then orchestration, then the CLI, then tests. Each box
 is a reviewable step — we go one at a time.
 
-Flat package layout (no per-layer folders):
-`config.py · ports.py · records.py · models.py · source.py · storage.py · pipeline.py · runner.py · cli.py`
+Layered package (hexagonal), `config.py` cross-cutting:
+`core/domain: models · records · mapping` · `core/application: ports · pipeline` · `adapters: source · storage · cli`
 
 Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format),
 `mypy` (dev-only, lenient), `pytest`.
@@ -24,9 +24,9 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
 
 ## 2. Domain models
 
-- [x] `models.py`: msgspec structs = staging schema. `Pokemon`, `Species`, `Type`, `Move` —
-      comprehensive analytically-useful field sets (everything a deferred Transform might need,
-      no derivations). The typed projection Load decodes/reshapes raw into.
+- [x] `models.py`: msgspec structs = staging schema. `Pokemon`, `PokemonSpecies`, `PokemonType`,
+      `PokemonMove` — comprehensive analytically-useful field sets (everything a deferred Transform
+      might need, no derivations). The typed projection Load decodes/reshapes raw into.
 
 ## 3. Source adapter (capture)
 
@@ -45,9 +45,10 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
       `meta` deferred to §8).
 - [x] `write_raw`: upsert `RawRecord`s into single `raw.records` by key (`ON CONFLICT DO UPDATE`),
       payload as JSON.
-- [x] `read_raw` / `write_staging`: Load reads raw payloads → module-level reshape fns (url→id,
-      flatten stats, slug tuples, nullable fields) → `to_staging()` ends in `msgspec.convert`
-      (the validation gate) → `INSERT OR REPLACE` into typed `staging.*`.
+- [x] `read_raw` / `write_staging`: Load reads raw payloads → `core/domain/mapping.py` reshape fns
+      (url→id, flatten stats, slug tuples, nullable fields) → `to_staging()` ends in `msgspec.convert`
+      (the validation gate) → `INSERT OR REPLACE` into typed `staging.*`. Storage owns only its
+      `entity → table` map; the reshape seam lives in the domain.
 
 ## 5. Orchestration
 
@@ -55,13 +56,15 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
       runner — runs active stages, folds each stage's `RunResult`. No shared `Context`: stages get
       deps at construction and communicate only through the DuckDB layers. Transform drops in later
       as a third `Stage` (the seam is the ABC + `config.stages`).
-- [x] `runner.py`: `PipelineRunner` (composition root) — build adapters from config, wire stages,
-      run `Pipeline`, return `RunResult`. Manual DI, no container.
+- The driving-port implementation lives with the CLI driving adapter (§6), not as a separate
+      application service — see `PipelineRunnerPort` below.
 
 ## 6. CLI & logging
 
-- [ ] `cli.py`: thin driving adapter. `load_config()` → `PipelineRunner(...).run()` — no args,
-      fully config-driven. Configure stdlib `logging` once here.
+- [x] `cli.py`: `CLIPipelineRunner` — driving adapter implementing `PipelineRunnerPort`. Composition
+      root (manual DI, no container): wires `PokeApiSource` + `DuckDbStorage`, runs `Pipeline`, owns
+      the connection lifecycle. `main()` configures stdlib `logging` once and runs `load_config()`.
+      No CLI args — fully config-driven.
 
 ## 7. Tests (per module)
 
@@ -71,11 +74,15 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
 - [x] Storage/Load: seed `raw` with the real fixtures → assert typed `staging` rows + msgspec
       validation errors (wrong type, missing required); idempotency (re-run = same state);
       resume (`existing_raw_keys` reflects only stored); every entity reshapes to staging.
+- [x] Pipeline: `FakeSource` stub + in-memory store → extract writes/resumes, load counts,
+      `Pipeline` runs only active stages and folds their `RunResult`s.
+- [x] CLI: `CLIPipelineRunner` end-to-end over fixtures (transport patched) → full extract→load,
+      load-only run, and `main()` config-driven entry.
 - [x] In-memory DuckDB; reuses `tests/fixtures/*` via shared `conftest.py`.
 
 ## 8. Nice-to-have (observability)
 
-- [ ] `meta.runs` table: `PipelineRunner` writes one row per run
+- [ ] `meta.runs` table: `CLIPipelineRunner` writes one row per run
       (run_id, started/finished, scope, counts, status). Run lineage/audit.
 
 ## 9. Deliverables

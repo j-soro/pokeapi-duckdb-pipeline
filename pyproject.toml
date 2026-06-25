@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
-pipeline = "pokeapi_pipeline.cli:main"
+pipeline = "pokeapi_pipeline.adapters.cli:main"
 
 [dependency-groups]
 dev = [

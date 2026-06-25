@@ -12,7 +12,7 @@ import hishel.httpx
 import httpx
 
 from pokeapi_pipeline.config import Config
-from pokeapi_pipeline.records import RawRecord
+from pokeapi_pipeline.core.domain.records import RawRecord
 
 _BASE_URL = "https://pokeapi.co/api/v2"
 _CACHE_DIR = ".cache"

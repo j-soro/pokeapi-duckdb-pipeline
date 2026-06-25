@@ -21,12 +21,12 @@ for a project this size).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  COMPOSITION ROOT / APP ENTRY     PipelineRunner  (implements PipelineRunnerPort)
-│  loads config, opens the connection, wires adapters→stages, runs the Pipeline  │
+│  DRIVING ADAPTER / APP ENTRY      CLIPipelineRunner  (implements PipelineRunnerPort)
+│  configures logging, loads config, wires adapters→stages, runs the Pipeline    │
 └───────────────┬───────────────────────────────────────────────────────────────┘
                 │ instantiates ↓
 ┌───────────────▼───────────────────────────────────────────────────────────────┐
-│  INFRASTRUCTURE / ADAPTERS  (the "how")                                        │
+│  DRIVEN ADAPTERS  (the "how")                                                  │
 │     PokeApiSource (httpx)                 DuckDbStorage (duckdb)                │
 │        implements│ SourcePort                 implements│ StoragePort           │
 └──────────────────┼─────────────────────────────────────┼───────────────────────┘
@@ -41,10 +41,11 @@ for a project this size).
 └───────────────┬────────────────────────────────────────────────────────────────┘
                 │ uses ↓
 ┌───────────────▼────────────────────────────────────────────────────────────────┐
-│  DOMAIN  (pure, no I/O — innermost)                                            │
-│     models.py  (Pokemon · Species · Type · Move — msgspec Structs = staging)   │
-│     (RawRecord/RunResult live in records.py — generic value types, not domain; │
-│      PokeAPI link/url navigation is private to the source adapter)             │
+│  DOMAIN  (core/domain — pure, no I/O — innermost)                              │
+│     models.py  Pokemon · PokemonSpecies · PokemonType · PokemonMove = staging  │
+│     mapping.py to_staging · ENTITY_TYPES · _reshape_* (raw → validated struct) │
+│     records.py RawRecord · RunResult (value types crossing the ports)          │
+│     (PokeAPI link/url navigation is private to the source adapter)             │
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -140,7 +141,7 @@ Polite throttle between calls.
 
 - **Config**: `config.toml` at root → `msgspec.toml.decode` into a `frozen Config` struct (zero extra
   deps on 3.13). **Config-only — no CLI args** (the CLI just loads config and runs). **Manual DI** in
-  `PipelineRunner` (no container).
+  `CLIPipelineRunner` (no container).
 - **Cache (two layers)**: `raw` is the cross-run cache — re-run Load/Transform with zero API calls.
   Plus a **default-on hishel HTTP transport cache** inside the source adapter (honors API cache headers;
   polite while iterating on the fetch logic).
@@ -150,19 +151,28 @@ Polite throttle between calls.
 
 ## 7. Module layout (src-layout)
 
+Layered by the dependency rule: `core/` (domain + application) knows nothing of infrastructure;
+`adapters/` sit outside it. The driving adapter doubles as the composition root.
+
 ```
 config.toml   pyproject.toml   README.md
-src/pokeapi_pipeline/                            # FLAT — no per-layer folders
-  config.py      # Config + load_config()
-  ports.py       # SourcePort · StoragePort · PipelineRunnerPort (pure Protocols)
-  records.py     # RawRecord · RunResult (value types crossing the ports)
-  models.py      # Pokemon · Species · Type · Move (msgspec structs = staging schema)
-  source.py      # PokeApiSource — SourcePort adapter (httpx + hishel + UA; navigation private)
-  storage.py     # DuckDbStorage — StoragePort adapter + msgspec decode (raw → staging)
-  pipeline.py    # Stage (ABC) · Pipeline · ExtractStage · LoadStage · (TransformStage later)
-  runner.py      # PipelineRunner — composition root (manual DI)
-  cli.py         # thin driving adapter (loads config → runner); configures logging
-tests/           # fake SourcePort; in-memory DuckDB; JSON fixtures
+src/pokeapi_pipeline/
+  config.py                # Config + load_config()  (cross-cutting)
+  core/                    # inside — no infrastructure dependencies
+    domain/
+      models.py            # Pokemon · PokemonSpecies · PokemonType · PokemonMove (staging structs)
+      records.py           # RawRecord · RunResult (value types crossing the ports)
+      mapping.py           # to_staging · ENTITY_TYPES · _reshape_* (raw → validated struct)
+    application/
+      ports.py             # SourcePort · StoragePort · PipelineRunnerPort (pure Protocols)
+      pipeline.py          # Stage (ABC) · Pipeline · ExtractStage · LoadStage · (TransformStage later)
+  adapters/                # outside — infrastructure
+    source.py              # PokeApiSource — SourcePort (httpx + hishel + UA; navigation private)
+    storage.py             # DuckDbStorage — StoragePort (raw + staging persistence)
+    schema.sql             # warehouse DDL (adapter resource)
+    cli.py                 # CLIPipelineRunner — driving adapter (implements PipelineRunnerPort):
+                           #   composition root + manual DI + logging; main() entry
+tests/                     # fakes; in-memory DuckDB; JSON fixtures
 ```
 
 ## 8. Testing

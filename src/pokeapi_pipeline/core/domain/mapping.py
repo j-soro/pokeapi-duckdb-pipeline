@@ -1,15 +1,15 @@
-"""DuckDbStorage adapter and the raw->staging reshape/validate seam."""
+"""Raw payload -> validated staging struct (the interpret seam)."""
 
-from collections.abc import Iterable, Iterator
-from pathlib import Path
+from collections.abc import Callable
 
-import duckdb
 import msgspec
 
-from pokeapi_pipeline.models import Move, Pokemon, Species, Type
-from pokeapi_pipeline.records import RawRecord
-
-_SCHEMA = (Path(__file__).parent / "schema.sql").read_text()
+from pokeapi_pipeline.core.domain.models import (
+    Pokemon,
+    PokemonMove,
+    PokemonSpecies,
+    PokemonType,
+)
 
 
 def _ref_id(url: str) -> int:
@@ -117,76 +117,23 @@ def _reshape_move(p: dict) -> dict:
     }
 
 
-# entity_type -> (reshape fn, struct, staging table). 'pokemon-species' lands in staging.species.
-_LOADERS: dict[str, tuple] = {
-    "pokemon": (_reshape_pokemon, Pokemon, "pokemon"),
-    "pokemon-species": (_reshape_species, Species, "species"),
-    "type": (_reshape_type, Type, "type"),
-    "move": (_reshape_move, Move, "move"),
+# entity_type -> (reshape fn, staging struct). Table names are the storage adapter's concern.
+_RESHAPERS: dict[str, tuple[Callable[[dict], dict], type[msgspec.Struct]]] = {
+    "pokemon": (_reshape_pokemon, Pokemon),
+    "pokemon-species": (_reshape_species, PokemonSpecies),
+    "type": (_reshape_type, PokemonType),
+    "move": (_reshape_move, PokemonMove),
 }
 
-ENTITY_TYPES: tuple[str, ...] = tuple(_LOADERS)  # the entity types Load stages over
+ENTITY_TYPES: tuple[str, ...] = tuple(_RESHAPERS)  # the entity types Load stages over
 
 
 def to_staging(entity_type: str, payload: dict) -> msgspec.Struct:
     """Reshape a raw payload and validate it against its struct (the validation gate)."""
-    reshape, struct, _ = _LOADERS[entity_type]
+    reshape, struct = _RESHAPERS[entity_type]
     return msgspec.convert(reshape(payload), type=struct)
 
 
-class DuckDbStorage:
-    """One DuckDB connection; raw and staging schemas ensured on init."""
-
-    def __init__(self, db_path: str) -> None:
-        if db_path != ":memory:":
-            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._con = duckdb.connect(db_path)
-        self._con.execute(_SCHEMA)
-
-    def existing_raw_keys(self) -> set[str]:
-        return {key for (key,) in self._con.execute("SELECT key FROM raw.records").fetchall()}
-
-    def write_raw(self, records: Iterable[RawRecord]) -> int:
-        rows = [
-            (r.key, r.entity_type, msgspec.json.encode(r.payload).decode(), r.fetched_at)
-            for r in records
-        ]
-        self._con.executemany(
-            """
-            INSERT INTO raw.records (key, entity_type, payload, fetched_at) VALUES (?, ?, ?, ?)
-            ON CONFLICT (key) DO UPDATE SET
-                entity_type = excluded.entity_type,
-                payload = excluded.payload,
-                fetched_at = excluded.fetched_at
-            """,
-            rows,
-        )
-        return len(rows)
-
-    def read_raw(self, entity_type: str) -> Iterator[dict]:
-        cursor = self._con.execute(
-            "SELECT payload FROM raw.records WHERE entity_type = ?", [entity_type]
-        )
-        for (payload,) in cursor.fetchall():
-            yield msgspec.json.decode(payload)
-
-    def write_staging(self, entity_type: str, rows: Iterable[object]) -> int:
-        _, struct, table = _LOADERS[entity_type]
-        fields = struct.__struct_fields__
-        columns = ", ".join(f'"{f}"' for f in fields)
-        placeholders = ", ".join(["?"] * len(fields))
-        data = [
-            [self._as_param(getattr(row, f)) for f in fields]  # struct values in column order
-            for row in rows
-        ]
-        self._con.executemany(
-            f"INSERT OR REPLACE INTO staging.{table} ({columns}) VALUES ({placeholders})", data
-        )
-        return len(data)
-
-    @staticmethod
-    def _as_param(value: object) -> object:
-        return list(value) if isinstance(value, tuple) else value  # tuple slug -> DuckDB array
-
-    def close(self) -> None:
-        self._con.close()
+def struct_for(entity_type: str) -> type[msgspec.Struct]:
+    """The staging struct a raw entity reshapes into."""
+    return _RESHAPERS[entity_type][1]

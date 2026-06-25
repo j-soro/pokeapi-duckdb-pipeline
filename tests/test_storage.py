@@ -8,9 +8,10 @@ from pathlib import Path
 import msgspec
 import pytest
 
-from pokeapi_pipeline.models import Pokemon, Type
-from pokeapi_pipeline.records import RawRecord
-from pokeapi_pipeline.storage import DuckDbStorage, to_staging
+from pokeapi_pipeline.adapters.storage import DuckDbStorage
+from pokeapi_pipeline.core.domain.mapping import to_staging
+from pokeapi_pipeline.core.domain.models import Pokemon, PokemonType
+from pokeapi_pipeline.core.domain.records import RawRecord
 
 _ENTITY_TYPES = ("pokemon", "pokemon-species", "type", "move")
 
@@ -74,7 +75,7 @@ def test_reshape_pokemon_values(raw_records: list[RawRecord]) -> None:
 
 def test_reshape_type_lists_and_null(raw_records: list[RawRecord]) -> None:
     ty = to_staging("type", _payload(raw_records, "type:1"))  # normal
-    assert isinstance(ty, Type)
+    assert isinstance(ty, PokemonType)
     assert ty.name == "normal"
     assert ty.no_damage_to == ("ghost",)
     assert ty.double_damage_to == ()  # empty tuple, not null
@@ -106,7 +107,7 @@ def test_reshape_type_with_null_damage_class(raw_records: list[RawRecord]) -> No
     payload = dict(_payload(raw_records, "type:1"))
     payload["move_damage_class"] = None  # newer types have no damage class
     ty = to_staging("type", payload)
-    assert isinstance(ty, Type)
+    assert isinstance(ty, PokemonType)
     assert ty.move_damage_class is None
 
 

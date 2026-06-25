@@ -6,9 +6,9 @@ to exactly one row, so staging counts equal the number of raw records.
 
 from collections.abc import Iterator
 
-from pokeapi_pipeline.pipeline import ExtractStage, LoadStage, Pipeline
-from pokeapi_pipeline.records import RawRecord
-from pokeapi_pipeline.storage import DuckDbStorage
+from pokeapi_pipeline.adapters.storage import DuckDbStorage
+from pokeapi_pipeline.core.application.pipeline import ExtractStage, LoadStage, Pipeline
+from pokeapi_pipeline.core.domain.records import RawRecord
 
 
 class FakeSource:
