@@ -30,12 +30,13 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
 
 ## 3. Source adapter (capture)
 
-- [ ] `source.py`: `PokeApiSource` implements `SourcePort`. Private helpers own ALL PokeAPI
+- [x] `source.py`: `PokeApiSource` implements `SourcePort`. Private helpers own ALL PokeAPI
       specifics: base URL, paths, **custom User-Agent** (default UA is 403'd), hishel transport
-      cache, `_list_pokemon`, `_list_types`, `_fetch`, `_references` (url→key parsing).
-- [ ] `records()`: pass 1 fetch pokemon → extract referenced keys; pass 2 fetch
-      species + moves + the fixed 18 types. Skip keys in `have` (resume); pokemon re-traversed
-      for discovery are served from hishel cache.
+      cache (store-and-use), `_list_pokemon`, `_type_keys`, `_get` (retry/backoff), `_references`
+      and `_key` (url→key parsing).
+- [x] `records()`: pass 1 fetch pokemon → extract referenced keys; pass 2 fetch
+      species + moves + the fixed 18 types. Skip keys in `existing` (resume); pokemon re-traversed
+      for discovery are served from the hishel cache.
 
 ## 4. Storage adapter (interpret + persist)
 
@@ -60,7 +61,9 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
 
 ## 7. Tests (per module)
 
-- [ ] Source: fake/mocked HTTP → assert yielded `RawRecord`s, resume skips `have`.
+- [x] Source: real captured fixtures replayed via `httpx.MockTransport` → assert the source yields
+      exactly the captured universe (completeness oracle), all 4 entity types, resume skips
+      `existing` while keeping discovery, url→key parsing, retry/backoff.
 - [ ] Storage/Load: seed `raw` with JSON fixtures → assert typed `staging` rows + msgspec
       validation errors; idempotency (re-run = same state); resume (only missing fetched).
 - [ ] In-memory DuckDB; fixtures captured from the validated spike.

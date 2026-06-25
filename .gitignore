@@ -3,10 +3,17 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Pipeline outputs
 data/
 *.duckdb
+
+# HTTP transport cache (hishel) — dev-only
+.cache/
 
 # Dev tooling (not part of the deliverable)
 .claude/

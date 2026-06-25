@@ -9,7 +9,7 @@ from pokeapi_pipeline.records import RawRecord, RunResult
 class SourcePort(Protocol):
     """PokeAPI source; the adapter hides navigation."""
 
-    def records(self, limit: int, have: set[str]) -> Iterator[RawRecord]: ...
+    def records(self, limit: int, existing: set[str]) -> Iterator[RawRecord]: ...
 
 
 class StoragePort(Protocol):
