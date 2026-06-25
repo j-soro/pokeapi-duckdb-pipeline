@@ -1,3 +1,24 @@
 [tools]
 python = "3.13"
 uv = "latest"
+
+[tasks.fmt]
+description = "Auto-format"
+run = "uv run ruff format ."
+
+[tasks.lint]
+description = "Lint + type-check"
+run = ["uv run ruff check .", "uv run mypy"]
+
+[tasks.test]
+description = "Run tests"
+run = "uv run pytest"
+
+[tasks.check]
+description = "Full gate: format-check, lint, type-check, test"
+run = [
+    "uv run ruff format --check .",
+    "uv run ruff check .",
+    "uv run mypy",
+    "uv run pytest",
+]
