@@ -1,0 +1,6 @@
+db_path = "data/pokemon.duckdb"
+limit = 151
+user_agent = "pokeapi-pipeline/0.1"
+request_delay = 0.1
+force_refresh = false
+stages = ["extract", "load"]
