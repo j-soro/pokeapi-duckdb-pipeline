@@ -52,7 +52,7 @@ class PokeApiSource:
         return hishel.httpx.SyncCacheTransport(
             next_transport=httpx.HTTPTransport(retries=2),
             storage=storage,
-            # store-and-use: serve cached entries without revalidation (offline warm runs)
+            # store-and-use: serve cached entries offline, without revalidation
             policy=hishel.SpecificationPolicy(hishel.CacheOptions(allow_stale=True)),
         )
 

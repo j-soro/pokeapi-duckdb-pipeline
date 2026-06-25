@@ -1,8 +1,6 @@
-"""PokeApiSource navigation tests.
+"""PokeApiSource navigation tests; real captured fixtures replayed via MockTransport.
 
-Real PokeAPI payloads (tests/fixtures, see capture_fixtures.py) are replayed
-through httpx.MockTransport. The fixtures on disk are the oracle: the source
-must yield exactly the captured entities, no more, no less.
+The fixtures on disk are the oracle: the source must yield exactly the captured entities.
 """
 
 import json
@@ -133,8 +131,9 @@ def test_retries_then_succeeds(fixtures: dict[str, dict]) -> None:
     assert keys == set(fixtures)
 
 
-def test_default_transport_is_store_and_use() -> None:
-    source = PokeApiSource(Config())  # no transport injected -> builds the real cache transport
+def test_default_transport_builds_cache_transport() -> None:
+    # no transport injected -> the real hishel cache transport is constructed without error
+    source = PokeApiSource(Config())
     assert type(source._transport).__name__ == "SyncCacheTransport"
 
 

@@ -1,11 +1,9 @@
-"""Regenerate source-test fixtures from the live PokeAPI (run manually).
+"""Regenerate the test fixtures from the live PokeAPI (run manually):
 
     uv run python -m tests.capture_fixtures
 
-Captures one real pokemon (moves trimmed to keep the set small), its species,
-those moves, and the 18 types into tests/fixtures/<entity>/<id>.json. The tests
-replay these offline; trimming moves keeps fixtures small without weakening the
-navigation check (the source still fetches every move the payload lists).
+One pokemon (moves trimmed), its species, those moves, and the 18 types, written
+to tests/fixtures/<entity>/<id>.json and replayed offline by the tests.
 """
 
 import json

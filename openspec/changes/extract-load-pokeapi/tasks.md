@@ -40,12 +40,14 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
 
 ## 4. Storage adapter (interpret + persist)
 
-- [ ] `storage.py`: `DuckDbStorage` implements `StoragePort`. One connection. Ensures schemas
-      `raw`, `staging` (+ `meta`) on init.
-- [ ] `write_raw`: upsert `RawRecord`s into `raw.*` by key (`INSERT OR REPLACE`), payload as JSON.
-- [ ] `read_raw` / `write_staging`: Load reads raw payloads, **msgspec-decodes into `models.py`
-      structs** (validate + reshape: url→id, flatten stats, slug lists, nullable power/accuracy),
-      writes typed `staging.*`.
+- [x] `storage.py`: `DuckDbStorage` implements `StoragePort`. One connection. Ensures `raw` +
+      `staging` schemas on init from explicit `schema.sql` (no migrations — staging is rebuildable;
+      `meta` deferred to §8).
+- [x] `write_raw`: upsert `RawRecord`s into single `raw.records` by key (`ON CONFLICT DO UPDATE`),
+      payload as JSON.
+- [x] `read_raw` / `write_staging`: Load reads raw payloads → module-level reshape fns (url→id,
+      flatten stats, slug tuples, nullable fields) → `to_staging()` ends in `msgspec.convert`
+      (the validation gate) → `INSERT OR REPLACE` into typed `staging.*`.
 
 ## 5. Orchestration
 
@@ -64,9 +66,10 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
 - [x] Source: real captured fixtures replayed via `httpx.MockTransport` → assert the source yields
       exactly the captured universe (completeness oracle), all 4 entity types, resume skips
       `existing` while keeping discovery, url→key parsing, retry/backoff.
-- [ ] Storage/Load: seed `raw` with JSON fixtures → assert typed `staging` rows + msgspec
-      validation errors; idempotency (re-run = same state); resume (only missing fetched).
-- [ ] In-memory DuckDB; fixtures captured from the validated spike.
+- [x] Storage/Load: seed `raw` with the real fixtures → assert typed `staging` rows + msgspec
+      validation errors (wrong type, missing required); idempotency (re-run = same state);
+      resume (`existing_raw_keys` reflects only stored); every entity reshapes to staging.
+- [x] In-memory DuckDB; reuses `tests/fixtures/*` via shared `conftest.py`.
 
 ## 8. Nice-to-have (observability)
 
