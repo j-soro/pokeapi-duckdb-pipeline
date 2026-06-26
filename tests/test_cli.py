@@ -87,9 +87,9 @@ def test_failed_run_records_failure(
     with pytest.raises(RuntimeError, match="kaboom"):
         CLIPipelineRunner(Config(db_path=str(db), limit=full_limit, request_delay=0.0)).run()
     con = duckdb.connect(str(db))
-    status, error, has_finished = con.execute(
-        "SELECT status, error, finished_at IS NOT NULL FROM meta.runs"
-    ).fetchone()
+    row = con.execute("SELECT status, error, finished_at IS NOT NULL FROM meta.runs").fetchone()
+    assert row is not None
+    status, error, has_finished = row
     con.close()
     assert status == "failed"
     assert "kaboom" in error
