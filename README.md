@@ -34,7 +34,10 @@ quick check. A refresh is just deleting the file. Inspect with any DuckDB client
 
 Hexagonal (ports & adapters) with modules, see the [architecture diagram](diagrams/architecture.svg) for reference.
 
-![Architecture](diagrams/architecture.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/architecture-dark.svg">
+  <img alt="Architecture" src="diagrams/architecture.svg">
+</picture>
 
 ```
 src/pokeapi_pipeline/
