@@ -3,8 +3,8 @@
 Extract & Load pipeline pulling four related entities — `pokemon`, `pokemon-species`,
 `type`, `move` — from [PokeAPI](https://pokeapi.co) into a single local DuckDB file, organised
 as a layered warehouse: an immutable `raw` capture and a typed, validated `staging` layer
-derived from it. The Transform step (an `analytics` star schema) is out of scope and delivered
-as a [diagram](diagrams/star-schema.svg).
+derived from it. The Transform step is out of scope to code and delivered as a
+[plan](#transformation-plan) — a star-schema diagram.
 
 ## Run
 
@@ -52,6 +52,24 @@ src/pokeapi_pipeline/
     cli.py               # CLIPipelineRunner — entry point + wiring
 ```
 
+## Transformation Plan
+
+Transform is out of scope to code (per the brief) and delivered as a plan: an `analytics` star
+schema, shown below and seeded as executable DDL in [`diagrams/star-schema.sql`](diagrams/star-schema.sql).
+
+![Star schema](diagrams/star-schema.svg)
+
+**What it's for.** The star feeds a team-optimizer — a MILP that picks an optimal six-Pokémon team
+(maximise defensive type coverage, minimise attacking-type overlap, maximise firepower). `fact_pokemon`
+(stats), the `dim_type` / `dim_move` / `dim_species` dimensions, and the bridges (type slots, learnsets,
+and the 18×18 `type_effectiveness` matrix) are exactly the inputs that objective reads — so this isn't a
+generic warehouse: every table exists because the optimizer (a recommendation-system input) needs it.
+
+**How I'd build it.** Materialised with [dbt](https://www.getdbt.com/) over the same DuckDB file — one
+model per gold table, the derivations (base-stat totals, the 18×18 matrix, the bridge unnests) as SQL,
+and the invariants (matrix completeness, bridge cardinality) as dbt tests. It drops into the pipeline as
+a third `TransformStage` behind `config.stages`; the seam already exists.
+
 ## Approach
 
 The pipeline rests on two foundations — **clean modular architecture** and a **layered
@@ -69,12 +87,11 @@ The data follows the medallion idea — three layers, each rebuilt from the one 
 Because `raw` is immutable, a parsing change re-runs Load with zero API calls, and there are no
 migrations — every layer is rebuildable from the one before.
 
-Development was spec-driven with [OpenSpec](https://github.com/Fission-AI/openspec): the
-requirements were captured up front as a change (`proposal.md` → `design.md` → `tasks.md`),
-built inner-to-outer one task at a time, and each task validated with unit tests before moving
-on. This keeps an AI-assisted workflow honest: the design is the source of truth, the task
-list is the contract, and the tests prove the contract is met. Professional tooling throughout:
-`uv` (deps/lock), `mise` (toolchain + tasks), `ruff` (lint + format), `mypy`, `pytest`.
+Development was spec-driven with [OpenSpec](https://github.com/Fission-AI/openspec): requirements
+captured up front as a change (`proposal.md` → `design.md` → `tasks.md`), then built inner-to-outer,
+each task validated by unit tests before the next. This keeps an AI-assisted workflow honest — the
+design is the source of truth, the tasks are the contract, the tests prove it met. Tooling: `uv`
+(deps/lock), `mise` (toolchain + tasks), `ruff` (lint + format), `mypy`, `pytest`.
 
 Full rationale and trade-offs: `openspec/changes/extract-load-pokeapi/design.md`.
 
