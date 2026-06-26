@@ -16,6 +16,7 @@ class Pokemon(msgspec.Struct, frozen=True):
     species_id: int
     types: tuple[str, ...]
     abilities: tuple[str, ...]
+    moves: tuple[str, ...]
     sprite_front_default: str | None
     sprite_back_default: str | None
     hp: int

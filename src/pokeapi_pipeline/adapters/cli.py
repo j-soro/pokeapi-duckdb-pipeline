@@ -1,6 +1,8 @@
 """CLI driving adapter: wire the concrete adapters and run the pipeline."""
 
 import logging
+import uuid
+from datetime import UTC, datetime
 
 from pokeapi_pipeline.adapters.source import PokeApiSource
 from pokeapi_pipeline.adapters.storage import DuckDbStorage
@@ -19,9 +21,16 @@ class CLIPipelineRunner:
         self._config = config
 
     def run(self) -> RunResult:
-        log.info("pipeline starting — stages: %s", self._config.stages)
         storage = DuckDbStorage(self._config.db_path)
+        run_id = uuid.uuid4().hex
         try:
+            storage.begin_run(run_id, datetime.now(UTC), self._config.limit, self._config.stages)
+            log.info(
+                "run %s starting — stages: %s, scope: %d",
+                run_id,
+                self._config.stages,
+                self._config.limit,
+            )
             source = PokeApiSource(self._config)
             pipeline = Pipeline(
                 [
@@ -31,8 +40,22 @@ class CLIPipelineRunner:
                 self._config.stages,
             )
             result = pipeline.run()
-            log.info("done — raw: %d, staging: %d", result.raw_written, result.staging_written)
+            storage.finish_run(
+                run_id, datetime.now(UTC), "success", result.raw_written, result.staging_written
+            )
+            log.info(
+                "run %s done — raw: %d, staging: %d",
+                run_id,
+                result.raw_written,
+                result.staging_written,
+            )
             return result
+        except Exception as exc:
+            storage.finish_run(
+                run_id, datetime.now(UTC), "failed", error=f"{type(exc).__name__}: {exc}"
+            )
+            log.error("run %s failed: %s", run_id, exc)
+            raise
         finally:
             storage.close()
 

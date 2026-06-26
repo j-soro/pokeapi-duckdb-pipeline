@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS staging.pokemon (
     species_id BIGINT NOT NULL,
     types VARCHAR[] NOT NULL,
     abilities VARCHAR[] NOT NULL,
+    moves VARCHAR[] NOT NULL,
     sprite_front_default VARCHAR,
     sprite_back_default VARCHAR,
     hp BIGINT NOT NULL,
@@ -84,4 +85,19 @@ CREATE TABLE IF NOT EXISTS staging.move (
     damage_class VARCHAR NOT NULL,
     target VARCHAR NOT NULL,
     generation_id BIGINT NOT NULL
+);
+
+-- meta: run lineage / audit; one row per pipeline invocation.
+CREATE SCHEMA IF NOT EXISTS meta;
+
+CREATE TABLE IF NOT EXISTS meta.runs (
+    run_id VARCHAR PRIMARY KEY,
+    started_at TIMESTAMPTZ NOT NULL,
+    finished_at TIMESTAMPTZ,
+    status VARCHAR NOT NULL,
+    scope_limit BIGINT NOT NULL,
+    stages VARCHAR[] NOT NULL,
+    raw_written BIGINT,
+    staging_written BIGINT,
+    error VARCHAR
 );

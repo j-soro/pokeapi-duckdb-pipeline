@@ -5,7 +5,7 @@ inner-to-outer, mirroring EL. The diagram (the brief's actual deliverable) is th
 
 ## 1. Prerequisite (EL completion — tracked in extract-load-pokeapi)
 
-- [ ] `staging.pokemon.moves`: flatten `moves[].move.name` → distinct slug tuple
+- [x] `staging.pokemon.moves`: flatten `moves[].move.name` → distinct slug tuple
       (`models.py`, `mapping.py`, `schema.sql`, a test), mirroring `types`. Enables `bridge_pokemon_move`.
 
 ## 2. Deliverable (must ship)

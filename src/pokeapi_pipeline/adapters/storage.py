@@ -1,6 +1,7 @@
 """DuckDbStorage adapter: bronze raw + typed staging persistence."""
 
 from collections.abc import Iterable, Iterator
+from datetime import datetime
 from pathlib import Path
 
 import duckdb
@@ -80,6 +81,30 @@ class DuckDbStorage:
     @staticmethod
     def _as_param(value: object) -> object:
         return list(value) if isinstance(value, tuple) else value  # tuple slug -> DuckDB array
+
+    def begin_run(
+        self, run_id: str, started_at: datetime, scope_limit: int, stages: tuple[str, ...]
+    ) -> None:
+        self._con.execute(
+            "INSERT INTO meta.runs (run_id, started_at, status, scope_limit, stages) "
+            "VALUES (?, ?, 'running', ?, ?)",
+            [run_id, started_at, scope_limit, list(stages)],
+        )
+
+    def finish_run(
+        self,
+        run_id: str,
+        finished_at: datetime,
+        status: str,
+        raw_written: int | None = None,
+        staging_written: int | None = None,
+        error: str | None = None,
+    ) -> None:
+        self._con.execute(
+            "UPDATE meta.runs SET finished_at = ?, status = ?, raw_written = ?, "
+            "staging_written = ?, error = ? WHERE run_id = ?",
+            [finished_at, status, raw_written, staging_written, error, run_id],
+        )
 
     def close(self) -> None:
         self._con.close()

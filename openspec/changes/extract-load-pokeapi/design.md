@@ -111,7 +111,7 @@ basics, so Transform never re-extracts; only true derivations (BST, the type mat
   (aggregates/matrices belong to Transform). Slugs are the API's hyphenated `name`s; ids are parsed
   from URLs. Shapes:
   - `pokemon(id PK, name, height, weight, base_experience NULL, "order", is_default, species_id,
-    types VARCHAR[], abilities VARCHAR[], sprite_front_default NULL, sprite_back_default NULL,
+    types VARCHAR[], abilities VARCHAR[], moves VARCHAR[], sprite_front_default NULL, sprite_back_default NULL,
     hp, attack, defense, special_attack, special_defense, speed)`
   - `pokemon_species(id PK, name, "order", generation_id, evolution_chain_id, evolves_from_id NULL,
     is_legendary, is_mythical, is_baby, capture_rate, base_happiness NULL, gender_rate,
@@ -122,6 +122,8 @@ basics, so Transform never re-extracts; only true derivations (BST, the type mat
   - `move(id PK, name, power INTEGER NULL, accuracy NULL, pp NULL, priority, effect_chance NULL,
     type_id, damage_class, target, generation_id)` — `power`/`accuracy` null for status moves
 - **`analytics.*` (gold)** — deferred (BST, 18×18 type matrix, evolution families). Diagram only.
+- **`meta.runs`** — one row per pipeline run (lineage/audit): run_id, started/finished, scope, stages,
+  counts, status. Written by the runner.
 
 ## 5. Extraction — linked-resource fetch (inside the source adapter)
 

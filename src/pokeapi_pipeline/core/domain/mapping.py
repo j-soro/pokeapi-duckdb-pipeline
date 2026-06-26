@@ -46,6 +46,7 @@ def _reshape_pokemon(p: dict) -> dict:
         "species_id": _ref_id(p["species"]["url"]),
         "types": _slots(p["types"], "type"),
         "abilities": _slots(p["abilities"], "ability"),
+        "moves": sorted({m["move"]["name"] for m in p["moves"]}),  # learnset: distinct slugs
         "sprite_front_default": p["sprites"]["front_default"],
         "sprite_back_default": p["sprites"]["back_default"],
         "hp": stats["hp"],

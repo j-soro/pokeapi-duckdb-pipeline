@@ -41,8 +41,8 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
 ## 4. Storage adapter (interpret + persist)
 
 - [x] `storage.py`: `DuckDbStorage` implements `StoragePort`. One connection. Ensures `raw` +
-      `staging` schemas on init from explicit `schema.sql` (no migrations — staging is rebuildable;
-      `meta` deferred to §8).
+      `staging` + `meta` schemas on init from explicit `schema.sql` (no migrations — staging is
+      rebuildable; `meta.runs` holds run lineage, §8).
 - [x] `write_raw`: upsert `RawRecord`s into single `raw.records` by key (`ON CONFLICT DO UPDATE`),
       payload as JSON.
 - [x] `read_raw` / `write_staging`: Load reads raw payloads → `core/domain/mapping.py` reshape fns
@@ -82,8 +82,8 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
 
 ## 8. Nice-to-have (observability)
 
-- [ ] `meta.runs` table: `CLIPipelineRunner` writes one row per run
-      (run_id, started/finished, scope, counts, status). Run lineage/audit.
+- [x] `meta.runs` table: `CLIPipelineRunner` writes one row per run
+      (run_id, started/finished, scope, stages, counts, status). Run lineage/audit.
 - [x] Progress output: tqdm bars (extract fetch + per-entity load, shown only for slow work),
       cache-provenance + per-stage summary logs, `http_cache`/`log_level` config knobs.
 

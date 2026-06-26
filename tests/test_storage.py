@@ -75,6 +75,7 @@ def test_reshape_pokemon_values(raw_records: list[RawRecord]) -> None:
     pk = to_staging("pokemon", _payload(raw_records, "pokemon:1"))
     assert isinstance(pk, Pokemon)
     assert pk.types == ("grass", "poison")  # slot order preserved
+    assert pk.moves == ("cut", "razor-wind", "swords-dance")  # learnset: distinct slugs, sorted
     assert pk.species_id == 1  # url -> id
     assert pk.special_attack == 65  # hyphenated stat flattened
 
