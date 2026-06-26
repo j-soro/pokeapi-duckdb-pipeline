@@ -54,21 +54,31 @@ src/pokeapi_pipeline/
 
 ## Transformation Plan
 
-Transform is out of scope to code (per the brief) and delivered as a plan: an `analytics` star
-schema, shown below and seeded as executable DDL in [`diagrams/star-schema.sql`](diagrams/star-schema.sql).
+Transform is out of scope to code (per the brief), so it's delivered as a plan: the `analytics` star
+schema below, with executable DDL in [`diagrams/star-schema.sql`](diagrams/star-schema.sql).
 
 ![Star schema](diagrams/star-schema.svg)
 
-**What it's for.** The star feeds a team-optimizer — a MILP that picks an optimal six-Pokémon team
-(maximise defensive type coverage, minimise attacking-type overlap, maximise firepower). `fact_pokemon`
-(stats), the `dim_type` / `dim_move` / `dim_species` dimensions, and the bridges (type slots, learnsets,
-and the 18×18 `type_effectiveness` matrix) are exactly the inputs that objective reads — so this isn't a
-generic warehouse: every table exists because the optimizer (a recommendation-system input) needs it.
+**What it's for.** The star feeds a team optimizer: a MILP that picks the best 6-pokemon team by
+maximizing defensive type coverage, minimizing attacking-type overlap, and maximizing firepower.
+Everything that objective reads is a column in the star — `fact_pokemon` for stats, the
+`dim_type` / `dim_move` / `dim_species` dimensions, and the bridges for type slots, learnsets, and the
+18×18 type-effectiveness matrix. Every table earns its place from what the optimizer needs, but it's a
+plain dimensional model, so the same facts and dimensions serve other read patterns just as well — a
+Pokédex, a type-matchup explorer, dashboards. That's the "something a business could use" the brief asks
+for: the optimizer is one consumer (a recommendation input), not the only one.
 
-**How I'd build it.** Materialised with [dbt](https://www.getdbt.com/) over the same DuckDB file — one
-model per gold table, the derivations (base-stat totals, the 18×18 matrix, the bridge unnests) as SQL,
-and the invariants (matrix completeness, bridge cardinality) as dbt tests. It drops into the pipeline as
-a third `TransformStage` behind `config.stages`; the seam already exists.
+**How I'd build it.** A `TransformStage` runs the derivations as SQL over the same DuckDB file
+(base-stat totals, the 18×18 matrix, the bridge unnests), reading `staging` and writing `analytics`
+through the storage port. Same medallion idea as raw→staging, and it tests with the existing pytest
+setup. Adding it is close to trivial with the current setup: the pipeline already runs a list of stages
+behind `config.stages`, so `TransformStage` drops in as the third one with no changes to extract or load
+— that seam was built in from the start. For seven tables built once, plain SQL is enough. At larger
+scale I'd move this into dbt (one model per table, the invariants as dbt tests), but I wouldn't reach for
+it here just to use it.
+
+The full write-up — the optimizer model, per-table derivations, and the deferred build tasks — lives as
+an OpenSpec change in [`openspec/changes/transform-pokeapi`](openspec/changes/transform-pokeapi).
 
 ## Approach
 

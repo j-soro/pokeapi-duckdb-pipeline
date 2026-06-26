@@ -49,6 +49,13 @@ table (proving the data is already captured). The `TransformStage` implementatio
   re-extraction.
 - Transform reads only `staging` and writes only `analytics`; `analytics` is rebuildable from `staging`.
 
+## Alternatives considered
+
+- **dbt for the gold layer.** dbt is the standard tool here and what a production warehouse would use
+  (model per table, built-in `relationships` / `accepted_values` tests, lineage for free). For seven
+  tables built once it's overhead, and it runs outside the `StoragePort` seam — so the plan keeps the
+  derivations as in-stage SQL and treats dbt as the scale-up path, not the default.
+
 ## Impact
 
 - **New artifacts**: `diagrams/star-schema.*` (DDL + Mermaid source + exported SVG); this change's design.
