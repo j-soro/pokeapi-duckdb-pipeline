@@ -62,6 +62,12 @@ def test_existing_raw_keys_drives_resume(
     assert storage.existing_raw_keys() == {r.key for r in half}  # only what's stored
 
 
+def test_writes_are_noops_when_empty(storage: DuckDbStorage) -> None:
+    # full re-run yields no new records; an empty executemany must not raise
+    assert storage.write_raw([]) == 0
+    assert storage.write_staging("pokemon", []) == 0
+
+
 # --- reshape + validation ---------------------------------------------------
 
 

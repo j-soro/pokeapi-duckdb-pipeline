@@ -9,6 +9,7 @@ dependencies = [
     "hishel>=0.1",
     "msgspec>=0.19",
     "duckdb>=1.5",
+    "tqdm>=4.68.3",
 ]
 
 [project.scripts]

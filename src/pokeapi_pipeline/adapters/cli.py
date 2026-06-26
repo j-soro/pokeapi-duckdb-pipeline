@@ -38,8 +38,11 @@ class CLIPipelineRunner:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    runner: PipelineRunnerPort = CLIPipelineRunner(load_config())
+    config = load_config()
+    logging.basicConfig(level=config.log_level, format="%(asctime)s %(levelname)s %(message)s")
+    if config.log_level != "DEBUG":
+        logging.getLogger("httpx").setLevel(logging.WARNING)  # quiet per-request lines
+    runner: PipelineRunnerPort = CLIPipelineRunner(config)
     runner.run()
 
 

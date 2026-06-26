@@ -3,3 +3,5 @@ limit = 151
 user_agent = "pokeapi-pipeline/0.1"
 request_delay = 0.1
 stages = ["extract", "load"]
+http_cache = true
+log_level = "INFO"

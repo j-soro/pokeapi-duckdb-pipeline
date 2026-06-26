@@ -74,7 +74,7 @@ The adapter must not hide ETL logic.
 ## 3. The pipeline & stages
 
 `Pipeline` is dumb: it runs the active stages in order and folds each stage's `RunResult` into the run
-summary. **Stages communicate only through the DuckDB medallion layers** (`raw → staging → marts`),
+summary. **Stages communicate only through the DuckDB medallion layers** (`raw → staging → analytics`),
 never in memory — so there is **no shared `Context`**. Each stage gets its adapters at construction
 (manual DI in the runner) and returns only what it wrote; `Stage` is an internal ABC the three stages
 inherit. Logging is stdlib module loggers, configured once in `cli.py`.
@@ -90,7 +90,7 @@ class Pipeline:
   Generators live **only here**.
 - **LoadStage** — *interpret*. `read_raw(entity)` → **msgspec decode/validate** → typed `staging` rows
   via `write_staging`. Set-based; no generators.
-- **TransformStage** — deferred. Reads `staging`, writes `marts` via `execute(sql)`. Off by default.
+- **TransformStage** — deferred. Reads `staging`, writes `analytics` via `execute(sql)`. Off by default.
 
 ### Why Extract ≠ Load (capture vs interpret)
 
@@ -121,7 +121,7 @@ basics, so Transform never re-extracts; only true derivations (BST, the type mat
     {double,half,no}_damage_{to,from} VARCHAR[])` — relations kept as slug lists; the 18×18 matrix is Transform
   - `move(id PK, name, power INTEGER NULL, accuracy NULL, pp NULL, priority, effect_chance NULL,
     type_id, damage_class, target, generation_id)` — `power`/`accuracy` null for status moves
-- **`marts.*` (gold)** — deferred (BST, 18×18 type matrix, evolution families). Diagram only.
+- **`analytics.*` (gold)** — deferred (BST, 18×18 type matrix, evolution families). Diagram only.
 
 ## 5. Extraction — linked-resource fetch (inside the source adapter)
 

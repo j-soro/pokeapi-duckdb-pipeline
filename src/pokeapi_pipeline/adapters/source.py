@@ -1,5 +1,6 @@
 """PokeApiSource — SourcePort adapter. All PokeAPI navigation is private here."""
 
+import logging
 import re
 import time
 from collections.abc import Iterator
@@ -10,6 +11,7 @@ from pathlib import Path
 import hishel
 import hishel.httpx
 import httpx
+from tqdm import tqdm
 
 from pokeapi_pipeline.config import Config
 from pokeapi_pipeline.core.domain.records import RawRecord
@@ -22,6 +24,8 @@ _MAX_ATTEMPTS = 3
 _RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 _REF = re.compile(r"/([\w-]+)/(\d+)/?$")  # ".../pokemon-species/6/" -> ("pokemon-species", "6")
 
+log = logging.getLogger(__name__)
+
 
 class PokeApiSource:
     """Fetches pokemon and their referenced species/moves, plus the 18 types."""
@@ -29,24 +33,38 @@ class PokeApiSource:
     def __init__(self, config: Config, transport: httpx.BaseTransport | None = None) -> None:
         self._user_agent = config.user_agent
         self._request_delay = config.request_delay
+        self._http_cache = config.http_cache
+        self._cache_hits = 0
+        self._downloads = 0
         self._transport = transport or self._default_transport()
 
     def records(self, limit: int, existing: set[str]) -> Iterator[RawRecord]:
+        self._cache_hits = self._downloads = 0
         with self._client() as client:
             refs: set[str] = set()
             # pass 1: pokemon drive discovery (fetched even when already captured, for their refs)
-            for url in self._list_pokemon(client, limit):
+            urls = self._list_pokemon(client, limit)
+            to_ingest = sum(1 for u in urls if self._key(u) not in existing)
+            log.info("pokemon: %d in scope, %d to ingest", len(urls), to_ingest)
+            for url in tqdm(urls, desc="pokemon", disable=None, delay=0.5):
                 key = self._key(url)
                 payload = self._get(client, url)
                 refs |= self._references(payload)
                 if key not in existing:
                     yield self._record(key, payload)
             # pass 2: the referenced species/moves + the fixed 18 types
-            for key in sorted((refs | self._type_keys()) - existing):
-                yield self._record(key, self._get(client, self._path(key)))
+            pending = sorted((refs | self._type_keys()) - existing)
+            if pending:
+                log.info("references: %d to ingest", len(pending))
+                for key in tqdm(pending, desc="references", disable=None, delay=0.5):
+                    yield self._record(key, self._get(client, self._path(key)))
+            else:
+                log.info("references: nothing new")
+            log.info("http: %d from cache, %d downloaded", self._cache_hits, self._downloads)
 
-    @staticmethod
-    def _default_transport() -> httpx.BaseTransport:
+    def _default_transport(self) -> httpx.BaseTransport:
+        if not self._http_cache:
+            return httpx.HTTPTransport(retries=2)  # bypass: always hit the network
         Path(_CACHE_DIR).mkdir(parents=True, exist_ok=True)
         storage = hishel.SyncSqliteStorage(database_path=str(Path(_CACHE_DIR) / "hishel.db"))
         return hishel.httpx.SyncCacheTransport(
@@ -71,8 +89,12 @@ class PokeApiSource:
             resp = client.get(url)
             if resp.status_code not in _RETRY_STATUSES or attempt == _MAX_ATTEMPTS - 1:
                 resp.raise_for_status()
-                if self._request_delay and not resp.extensions.get("hishel_from_cache"):
-                    time.sleep(self._request_delay)  # throttle real hits only, not cache hits
+                if resp.extensions.get("hishel_from_cache"):
+                    self._cache_hits += 1
+                else:
+                    self._downloads += 1
+                    if self._request_delay:
+                        time.sleep(self._request_delay)  # throttle real hits only
                 return resp.json()
             time.sleep(self._backoff(resp, attempt))
         raise AssertionError("unreachable")

@@ -84,9 +84,11 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
 
 - [ ] `meta.runs` table: `CLIPipelineRunner` writes one row per run
       (run_id, started/finished, scope, counts, status). Run lineage/audit.
+- [x] Progress output: tqdm bars (extract fetch + per-entity load, shown only for slow work),
+      cache-provenance + per-stage summary logs, `http_cache`/`log_level` config knobs.
 
 ## 9. Deliverables
 
-- [ ] README: how to run + approach/decisions.
+- [x] README: how to run + approach/decisions.
 - [ ] Diagrams: high-level architecture/data-flow + Transformation Plan (star schema deferred).
 - [ ] Share the repository with reviewers.

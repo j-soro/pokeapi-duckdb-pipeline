@@ -20,3 +20,6 @@ data/
 
 # Dev tooling (Serena MCP) — not part of the deliverable
 .serena/
+
+# JetBrains IDE — dev-only
+.idea/

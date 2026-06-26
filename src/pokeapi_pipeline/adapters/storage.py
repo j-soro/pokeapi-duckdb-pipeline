@@ -5,6 +5,7 @@ from pathlib import Path
 
 import duckdb
 import msgspec
+from tqdm import tqdm
 
 from pokeapi_pipeline.core.domain.mapping import struct_for
 from pokeapi_pipeline.core.domain.records import RawRecord
@@ -37,6 +38,8 @@ class DuckDbStorage:
             (r.key, r.entity_type, msgspec.json.encode(r.payload).decode(), r.fetched_at)
             for r in records
         ]
+        if not rows:
+            return 0  # nothing new (e.g. full re-run, all keys cached)
         self._con.executemany(
             """
             INSERT INTO raw.records (key, entity_type, payload, fetched_at) VALUES (?, ?, ?, ?)
@@ -53,7 +56,9 @@ class DuckDbStorage:
         cursor = self._con.execute(
             "SELECT payload FROM raw.records WHERE entity_type = ?", [entity_type]
         )
-        for (payload,) in cursor.fetchall():
+        for (payload,) in tqdm(
+            cursor.fetchall(), desc=f"load {entity_type}", disable=None, delay=0.5
+        ):
             yield msgspec.json.decode(payload)
 
     def write_staging(self, entity_type: str, rows: Iterable[object]) -> int:
@@ -65,6 +70,8 @@ class DuckDbStorage:
             [self._as_param(getattr(row, f)) for f in fields]  # struct values in column order
             for row in rows
         ]
+        if not data:
+            return 0
         self._con.executemany(
             f"INSERT OR REPLACE INTO staging.{table} ({columns}) VALUES ({placeholders})", data
         )
