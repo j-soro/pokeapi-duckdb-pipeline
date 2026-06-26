@@ -4,7 +4,7 @@ Extract & Load pipeline pulling four related entities — `pokemon`, `pokemon-sp
 `type`, `move` — from [PokeAPI](https://pokeapi.co) into a single local DuckDB file, organised
 as a layered warehouse: an immutable `raw` capture and a typed, validated `staging` layer
 derived from it. The Transform step (an `analytics` star schema) is out of scope and delivered
-as a [diagram](diagrams/transform-star-schema.png).
+as a [diagram](diagrams/star-schema.svg).
 
 ## Run
 

@@ -1,0 +1,64 @@
+%% Transform Plan — analytics (gold) star schema. Diagram source.
+%% Canonical schema: diagrams/star-schema.sql. Rationale: openspec transform-pokeapi.
+erDiagram
+    dim_type {
+        int type_id PK
+        varchar name
+    }
+    dim_species {
+        int species_id PK
+        varchar name
+        int evolution_chain_id
+        int evolves_from_species_id FK
+        bool is_legendary
+        bool is_mythical
+        int generation_id
+    }
+    dim_move {
+        int move_id PK
+        varchar name
+        int type_id FK
+        int power "null for status"
+        int accuracy "null for status"
+        varchar damage_class "physical|special|status"
+        int pp
+    }
+    fact_pokemon {
+        int pokemon_id PK
+        int species_id FK
+        varchar name
+        int generation_id
+        int hp
+        int attack
+        int defense
+        int sp_atk
+        int sp_def
+        int speed
+        int base_stat_total "sum of 6 stats"
+        int height
+        int weight
+    }
+    bridge_pokemon_type {
+        int pokemon_id PK,FK
+        int type_id PK,FK
+        smallint slot "1|2"
+    }
+    bridge_pokemon_move {
+        int pokemon_id PK,FK
+        int move_id PK,FK
+    }
+    bridge_type_effectiveness {
+        int attacking_type_id PK,FK
+        int defending_type_id PK,FK
+        double multiplier "0.0|0.5|1.0|2.0"
+    }
+
+    dim_species ||--o{ fact_pokemon : "species"
+    dim_species ||--o{ dim_species : "evolves from"
+    dim_type    ||--o{ dim_move : "move type"
+    fact_pokemon ||--o{ bridge_pokemon_type : ""
+    dim_type    ||--o{ bridge_pokemon_type : ""
+    fact_pokemon ||--o{ bridge_pokemon_move : ""
+    dim_move    ||--o{ bridge_pokemon_move : ""
+    dim_type    ||--o{ bridge_type_effectiveness : "attacker"
+    dim_type    ||--o{ bridge_type_effectiveness : "defender"

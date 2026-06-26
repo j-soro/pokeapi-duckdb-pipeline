@@ -90,5 +90,5 @@ Dev tooling: `uv` (deps/lock), `mise` (python 3.13 + uv), `ruff` (lint + format)
 ## 9. Deliverables
 
 - [x] README: how to run + approach/decisions.
-- [ ] Diagrams: high-level architecture/data-flow + Transformation Plan (star schema deferred).
+- [x] Diagrams: high-level architecture/data-flow + Transformation Plan (star schema, `diagrams/star-schema.svg`).
 - [ ] Share the repository with reviewers.
