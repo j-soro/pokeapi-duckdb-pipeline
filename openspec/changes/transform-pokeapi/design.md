@@ -1,8 +1,8 @@
 # Design — Transform (staging → analytics star)
 
 Solution reference for the `transform-pokeapi` change. `proposal.md` holds the *what/why*; this records
-the *how/why* of the gold model and the algorithm it serves. **Impl is deferred** (the brief asks for
-Transform as a plan/diagram) — this is the agreed blueprint, so building it later is mechanical.
+the *how/why* of the gold model and the algorithm it serves. **Impl is deferred** (Transform starts as
+a plan/diagram) — this is the agreed blueprint, so building it later is mechanical.
 
 ## 1. Goal
 

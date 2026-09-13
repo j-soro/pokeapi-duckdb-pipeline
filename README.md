@@ -3,7 +3,7 @@
 Extract & Load pipeline pulling four related entities — `pokemon`, `pokemon-species`,
 `type`, `move` — from [PokeAPI](https://pokeapi.co) into a single local DuckDB file, organised
 as a layered warehouse: an immutable `raw` capture and a typed, validated `staging` layer
-derived from it. The Transform step is out of scope to code and delivered as a
+derived from it. The Transform step is not implemented yet and is documented as a
 [plan](#transformation-plan) — a star-schema diagram.
 
 ## Run
@@ -54,7 +54,7 @@ src/pokeapi_pipeline/
 
 ## Transformation Plan
 
-Transform is out of scope to code (per the brief), so it's delivered as a plan: the `analytics` star
+Transform isn't implemented yet, so it's documented as a plan: the `analytics` star
 schema below, with executable DDL in [`diagrams/star-schema.sql`](diagrams/star-schema.sql).
 
 ![Star schema](diagrams/star-schema.svg)
@@ -65,8 +65,8 @@ Everything that objective reads is a column in the star — `fact_pokemon` for s
 `dim_type` / `dim_move` / `dim_species` dimensions, and the bridges for type slots, learnsets, and the
 18×18 type-effectiveness matrix. Every table earns its place from what the optimizer needs, but it's a
 plain dimensional model, so the same facts and dimensions serve other read patterns just as well — a
-Pokédex, a type-matchup explorer, dashboards. That's the "something a business could use" the brief asks
-for: the optimizer is one consumer (a recommendation input), not the only one.
+Pokédex, a type-matchup explorer, dashboards. The optimizer is one consumer (a recommendation input),
+not the only one.
 
 **How I'd build it.** A `TransformStage` runs the derivations as SQL over the same DuckDB file
 (base-stat totals, the 18×18 matrix, the bridge unnests), reading `staging` and writing `analytics`

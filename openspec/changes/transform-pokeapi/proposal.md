@@ -7,7 +7,7 @@ consumer is a **competitive team-building optimizer**: a solver that picks an op
 by type coverage and firepower. The same star also backs a plain Pokédex dashboard — one gold model,
 two readers.
 
-Per the brief, **Transform is delivered as a plan + diagram, not code**. This change records that
+**Transform starts as a plan + diagram, not code**. This change records that
 plan: the gold star schema, the algorithm it feeds, and the staging-to-gold derivation for every
 table (proving the data is already captured). The `TransformStage` implementation is deferred.
 

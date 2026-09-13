@@ -3,7 +3,7 @@
 This project is a working example of how to gather and prepare third-party data for downstream
 transformation and analysis. We need a runnable, well-structured **Extract & Load (EL)** pipeline
 that pulls related entities from a public API and lands them in a queryable local store, ready for a
-later Transform step. PokeAPI is a good stand-in for a real client source: no auth, rich and
+later Transform step. PokeAPI works as a realistic third-party source: no auth, rich and
 naturally-related entities, and enough volume to require pagination, retries, and fair-use handling.
 
 The pipeline follows the **medallion** convention (raw → staging → [future] star schema) with a
@@ -11,9 +11,8 @@ The pipeline follows the **medallion** convention (raw → staging → [future] 
 faithful payloads into `raw`; Load *interprets* `raw` → typed `staging`; each medallion layer has
 exactly one writer), so each stage is modular, independently testable, and easy to reason about.
 
-This satisfies and exceeds the assignment's EL requirements — a runnable Python script, **four** entity
-types (vs. the required two), local storage, and modular design. The Transform step is delivered
-separately as a high-level diagram, exactly as the brief specifies.
+Scope: a runnable Python pipeline covering **four** related entity types, local storage, and a modular
+design. The Transform step is documented separately as a plan and high-level diagram.
 
 ## What Changes
 

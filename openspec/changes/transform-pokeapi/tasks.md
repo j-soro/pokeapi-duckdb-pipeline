@@ -1,14 +1,14 @@
 # Tasks — Transform (staging → analytics star)
 
-**Deferred**: implemented only if time remains after `extract-load-pokeapi` closes. Build order
-inner-to-outer, mirroring EL. The diagram (the brief's actual deliverable) is the only must-ship item.
+**Deferred**: to be implemented after `extract-load-pokeapi` closes. Build order
+inner-to-outer, mirroring EL. The diagram is the only must-ship item.
 
 ## 1. Prerequisite (EL completion — tracked in extract-load-pokeapi)
 
 - [x] `staging.pokemon.moves`: flatten `moves[].move.name` → distinct slug tuple
       (`models.py`, `mapping.py`, `schema.sql`, a test), mirroring `types`. Enables `bridge_pokemon_move`.
 
-## 2. Deliverable (must ship)
+## 2. Must ship
 
 - [x] Transform Plan diagram: the `analytics` star, authored as DDL + Mermaid → exported to
       `diagrams/star-schema.svg`, linked from the README.
